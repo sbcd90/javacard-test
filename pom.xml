@@ -24,7 +24,7 @@
             <artifactId>jcardsim</artifactId>
             <version>3.0.4-SNAPSHOT</version>
             <scope>system</scope>
-            <systemPath>/home/sbcd90/Documents/programs/web3j-javacard/jcardsim-3.0.4-SNAPSHOT.jar</systemPath>
+            <systemPath>C:/Users/i076326/Documents/programs/web3j-javacard/jcardsim-3.0.4-SNAPSHOT.jar</systemPath>
         </dependency>
     </dependencies>
 

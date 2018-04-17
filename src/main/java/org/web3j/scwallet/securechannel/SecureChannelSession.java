@@ -4,7 +4,9 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.*;
+import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Random;
 
 public class SecureChannelSession {
 
@@ -95,6 +97,99 @@ public class SecureChannelSession {
         return pairingIndex;
     }
 
+    public void pair(byte[] sharedSecret) throws Exception {
+        byte[] secretHash = MessageDigest.getInstance("SHA-256").digest(sharedSecret);
+
+        byte[] challenge = new byte[32];
+        new Random().nextBytes(challenge);
+
+        ResponseAPDU responseAPDU = this.pair(Constants.pairP1FirstStep, challenge);
+
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+
+        byte[] finalKey = new byte[secretHash.length + challenge.length];
+        System.arraycopy(secretHash, 0, finalKey, 0, secretHash.length);
+        System.arraycopy(challenge, 0, finalKey, secretHash.length, challenge.length);
+
+        byte[] expectedCryptogram = md.digest(finalKey);
+        byte[] cardCryptogram = Arrays.copyOfRange(responseAPDU.getData(), 0, 32);
+        byte[] cardChallenge = Arrays.copyOfRange(responseAPDU.getData(), 32, responseAPDU.getData().length);
+
+        if (!Arrays.equals(expectedCryptogram, cardCryptogram)) {
+            throw new CardException("Invalid card cryptogram");
+        }
+
+        md.reset();
+        finalKey = new byte[secretHash.length + responseAPDU.getData().length - 1];
+        System.arraycopy(secretHash, 0, finalKey, 0, secretHash.length);
+        System.arraycopy(Arrays.copyOfRange(responseAPDU.getData(), 1, responseAPDU.getData().length), 0,
+                finalKey, secretHash.length, responseAPDU.getData().length - 1);
+
+        this.setPairingKey(md.digest(finalKey));
+        this.setPairingIndex(responseAPDU.getData()[0]);
+    }
+
+    public void unpair() throws Exception {
+        if (this.getPairingKey() != null) {
+            throw new CardException("Cannot unpair: not paired");
+        }
+
+        this.transmitEncrypted(org.web3j.scwallet.wallet.Constants.claSCWallet,
+                org.web3j.scwallet.apdu.Constants.insUnpair,
+                (byte) this.getPairingIndex(), (byte) 0, new byte[]{});
+
+        this.setPairingKey(null);
+        this.setIv(null);
+    }
+
+    public void openSecureChannelAndAuthenticate() throws Exception {
+        if (this.getIv() != null) {
+            throw new CardException("Session already opened");
+        }
+
+        ResponseAPDU responseAPDU = this.open();
+
+        byte[] finalKey = new byte[this.getSecret().length + this.getPairingKey().length + Constants.scSecretLength];
+        System.arraycopy(this.getSecret(), 0, finalKey, 0, this.getSecret().length);
+        System.arraycopy(this.getPairingKey(), 0, finalKey, this.getSecret().length, this.getPairingKey().length);
+        System.arraycopy(Arrays.copyOfRange(responseAPDU.getData(), 0, Constants.scSecretLength), 0,
+                finalKey, this.getSecret().length + this.getPairingKey().length, Constants.scSecretLength);
+
+        byte[] keyData = MessageDigest.getInstance("SHA-512").digest(finalKey);
+        this.setSessionEncKey(Arrays.copyOfRange(keyData, 0, Constants.scSecretLength));
+        this.setSessionMacKey(Arrays.copyOfRange(keyData, Constants.scSecretLength, Constants.scSecretLength * 2));
+
+        this.setIv(Arrays.copyOfRange(responseAPDU.getData(), Constants.scSecretLength, responseAPDU.getData().length));
+
+        this.mutuallyAuthenticate();
+    }
+
+    private void mutuallyAuthenticate() throws Exception {
+        byte[] data = new byte[Constants.scSecretLength];
+        new Random().nextBytes(data);
+
+        ResponseAPDU response = this.transmitEncrypted(org.web3j.scwallet.wallet.Constants.claSCWallet,
+                org.web3j.scwallet.apdu.Constants.insMutuallyAuthenticate,
+                (byte) 0, (byte) 0, data);
+
+        if (response.getSW1() != 0x90 || response.getSW2() != 0x00) {
+            throw new CardException("Got unexpected response from MUTUALLY_AUTHENTICATE - " + response.getSW1() + ", " +
+            response.getSW2());
+        }
+
+        if (response.getData().length != Constants.scSecretLength) {
+            throw new CardException("Response from MUTUALLY_AUTHENTICATE was " + response.getData().length + ", expected " +
+            Constants.scSecretLength);
+        }
+    }
+
+    private ResponseAPDU pair(int p1, byte[] data) throws Exception {
+        CommandAPDU commandAPDU = new CommandAPDU(org.web3j.scwallet.wallet.Constants.claSCWallet,
+                org.web3j.scwallet.apdu.Constants.insPair,
+                p1, 0, data, 0);
+        return this.transmit(commandAPDU);
+    }
+
     public ResponseAPDU transmitEncrypted(byte cla, byte ins, byte p1, byte p2, byte[] data) throws Exception {
         if (this.getIv() == null) {
             throw new CardException("Channel not open");
@@ -179,6 +274,16 @@ public class SecureChannelSession {
         meta = cipher.doFinal(meta);
         data = cipher.doFinal(data);
         this.setIv(Arrays.copyOfRange(data, data.length - 32, data.length - 16));
+    }
+
+    private ResponseAPDU open() throws Exception {
+        CommandAPDU commandAPDU = new CommandAPDU(org.web3j.scwallet.wallet.Constants.claSCWallet,
+                org.web3j.scwallet.apdu.Constants.insOpenSecureChannel,
+                this.getPairingIndex(),
+                0,
+                this.getPublicKey(),
+                0);
+        return transmit(commandAPDU);
     }
 
     private byte[] pad(byte[] data, byte terminator) {

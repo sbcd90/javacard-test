@@ -1,10 +1,13 @@
 package org.web3j.scwallet.wallet;
 
 import org.web3j.scwallet.hub.Hub;
+import org.web3j.scwallet.securechannel.SecureChannelSession;
 
 import javax.smartcardio.Card;
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Wallet implements Serializable {
 
@@ -19,6 +22,11 @@ public class Wallet implements Serializable {
     private Card card;
 
     private Session session;
+
+    public Wallet() {
+        this.lock = new ReentrantLock(true);
+        this.session = new Session();
+    }
 
     public void setHub(Hub hub) {
         this.hub = hub;
@@ -62,8 +70,15 @@ public class Wallet implements Serializable {
 
     public void initialize() throws Exception {
         this.getLock().lock();
-        this.getLock().unlock();
 
-        this.getSession().initialize();
+        if (Objects.nonNull(this.getCard())) {
+            SecureChannelSession channel = new SecureChannelSession(this.getCard().getBasicChannel());
+            this.getSession().setChannel(channel);
+            this.getSession().initialize();
+            this.getLock().unlock();
+        } else {
+            this.getLock().unlock();
+            throw new RuntimeException("Please specify card parameter");
+        }
     }
 }

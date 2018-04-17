@@ -10,6 +10,7 @@ import org.web3j.scwallet.securechannel.SecureChannelSession;
 import java.io.Serializable;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.Security;
 import java.util.Random;
 
 public class Session implements Serializable {
@@ -47,6 +48,7 @@ public class Session implements Serializable {
     }
 
     public void initialize() throws Exception {
+        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
         ECParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec("secp256k1");
         KeyPairGenerator g = KeyPairGenerator.getInstance("ECDH", "BC");
         g.initialize(ecSpec);
