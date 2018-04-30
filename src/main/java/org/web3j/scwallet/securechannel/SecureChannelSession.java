@@ -1,10 +1,17 @@
 package org.web3j.scwallet.securechannel;
 
+import javacard.framework.ISO7816;
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.interfaces.ECPublicKey;
+import org.bouncycastle.jce.spec.ECParameterSpec;
+import org.bouncycastle.jce.spec.ECPublicKeySpec;
+
 import javax.crypto.Cipher;
+import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.*;
-import java.security.MessageDigest;
+import java.security.*;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -28,9 +35,35 @@ public class SecureChannelSession {
 
     private boolean open;
 
-    public SecureChannelSession(CardChannel apduChannel) {
+    private SecureRandom random;
+
+    public SecureChannelSession(CardChannel apduChannel, byte[] keyData) {
         this.apduChannel = apduChannel;
         this.open = false;
+
+        try {
+            random = new SecureRandom();
+            ECParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec("secp256k1");
+            KeyPairGenerator g = KeyPairGenerator.getInstance("ECDH", "BC");
+            g.initialize(ecSpec, random);
+
+            KeyPair keyPair = g.generateKeyPair();
+
+            publicKey = ((ECPublicKey) keyPair.getPublic()).getQ().getEncoded(false);
+            KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", "BC");
+            keyAgreement.init(keyPair.getPrivate());
+
+            ECPublicKeySpec cardKeySpec =
+                    new ECPublicKeySpec(ecSpec.getCurve().decodePoint(keyData), ecSpec);
+            ECPublicKey cardKey = (ECPublicKey) KeyFactory.getInstance("ECDSA", "BC").generatePublic(cardKeySpec);
+
+            keyAgreement.doPhase(cardKey, true);
+            secret = keyAgreement.generateSecret();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Is BouncyCastle in the classpath?", e);
+        }
+
     }
 
     public void setCardChannel(CardChannel apduChannel) {

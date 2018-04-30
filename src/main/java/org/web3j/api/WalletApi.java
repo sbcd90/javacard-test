@@ -11,8 +11,8 @@ public class WalletApi {
         this.wallet = new Wallet();
     }
 
-    public void initializeWallet(Card card) throws Exception {
+    public void initializeWallet(Card card, byte[] keyData) throws Exception {
         this.wallet.setCard(card);
-        this.wallet.initialize();
+        this.wallet.initialize(keyData);
     }
 }

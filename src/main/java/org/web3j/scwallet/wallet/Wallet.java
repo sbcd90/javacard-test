@@ -68,11 +68,11 @@ public class Wallet implements Serializable {
         return session;
     }
 
-    public void initialize() throws Exception {
+    public void initialize(byte[] keyData) throws Exception {
         this.getLock().lock();
 
         if (Objects.nonNull(this.getCard())) {
-            SecureChannelSession channel = new SecureChannelSession(this.getCard().getBasicChannel());
+            SecureChannelSession channel = new SecureChannelSession(this.getCard().getBasicChannel(), keyData);
             this.getSession().setChannel(channel);
             this.getSession().initialize();
             this.getLock().unlock();
