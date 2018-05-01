@@ -269,9 +269,22 @@ public class SecureChannelSession {
         }
 
         if (open) {
+            byte[] data = resp.getData();
+            byte[] meta = new byte[]{(byte) data.length, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            byte[] mac = Arrays.copyOf(data, this.getIv().length);
+            data = Arrays.copyOfRange(data, this.getIv().length, data.length);
+
+            byte[] plainData = this.decryptApdu(data);
+
+            this.updateIV(meta, data);
+
+            if (!Arrays.equals(this.getIv(), mac)) {
+                throw new CardException("Invalid MAC");
+            }
+            return new ResponseAPDU(plainData);
+        } else {
             return resp;
         }
-        throw new CardException("Card is not open");
     }
 
     public byte[] encryptApdu(byte[] data) throws Exception {

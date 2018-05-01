@@ -22,7 +22,7 @@
         <dependency>
             <groupId>com.licel</groupId>
             <artifactId>jcardsim</artifactId>
-            <version>3.0.4-SNAPSHOT</version>
+            <version>3.0.5-SNAPSHOT</version>
             <scope>system</scope>
             <systemPath>C:/Users/i076326/Documents/programs/web3j-javacard/jcardsim-3.0.4-SNAPSHOT.jar</systemPath>
         </dependency>

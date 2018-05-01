@@ -5,12 +5,13 @@ import com.licel.jcardsim.smartcardio.CardTerminalSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.ISO7816;
-import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
 import org.web3j.scwallet.securechannel.SecureChannelSession;
 
 import javax.smartcardio.*;
 import java.security.Security;
+import java.util.Arrays;
+import java.util.Random;
 
 public class CardSimulatorApplication {
 
@@ -44,7 +45,11 @@ public class CardSimulatorApplication {
         }
 
         SecureChannelSession secureChannelSession = new SecureChannelSession(apduChannel,
-                Arrays.copyOfRange(selectAPDU.getData(), 22, selectAPDU.getData().length));
+                Arrays.copyOfRange(selectAPDU.getData(), 22, selectAPDU.getData().length - 7));
+        byte[] challenge = new byte[32];
+        Random random = new Random();
+        random.nextBytes(challenge);
+//        secureChannelSession.pair(challenge);
         secureChannelSession.openSecureChannelAndAuthenticate();
 
 /*        CardChannel apduChannel = apduCard.getBasicChannel();
