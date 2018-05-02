@@ -49,7 +49,7 @@ public class CardSimulatorApplication {
         byte[] challenge = new byte[32];
         Random random = new Random();
         random.nextBytes(challenge);
-//        secureChannelSession.pair(challenge);
+        secureChannelSession.pair(challenge);
         secureChannelSession.openSecureChannelAndAuthenticate();
 
 /*        CardChannel apduChannel = apduCard.getBasicChannel();

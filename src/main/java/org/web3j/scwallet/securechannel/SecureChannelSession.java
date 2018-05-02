@@ -1,6 +1,5 @@
 package org.web3j.scwallet.securechannel;
 
-import javacard.framework.ISO7816;
 import org.bouncycastle.jce.ECNamedCurveTable;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.bouncycastle.jce.spec.ECParameterSpec;
@@ -11,7 +10,11 @@ import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.*;
-import java.security.*;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
+import javacard.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -131,20 +134,23 @@ public class SecureChannelSession {
     }
 
     public void pair(byte[] sharedSecret) throws Exception {
-        byte[] secretHash = MessageDigest.getInstance("SHA-256").digest(sharedSecret);
+        byte[] secretHash = new byte[sharedSecret.length];
+        MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false)
+                .doFinal(sharedSecret, (short) 0, (short) sharedSecret.length, secretHash, (short) 0);
 
         byte[] challenge = new byte[32];
         new Random().nextBytes(challenge);
 
         ResponseAPDU responseAPDU = this.pair(Constants.pairP1FirstStep, challenge);
 
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        MessageDigest md = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
 
         byte[] finalKey = new byte[secretHash.length + challenge.length];
         System.arraycopy(secretHash, 0, finalKey, 0, secretHash.length);
         System.arraycopy(challenge, 0, finalKey, secretHash.length, challenge.length);
 
-        byte[] expectedCryptogram = md.digest(finalKey);
+        byte[] expectedCryptogram = new byte[challenge.length];
+        md.doFinal(finalKey, (short) secretHash.length, (short) challenge.length, expectedCryptogram, (short) 0);
         byte[] cardCryptogram = Arrays.copyOfRange(responseAPDU.getData(), 0, 32);
         byte[] cardChallenge = Arrays.copyOfRange(responseAPDU.getData(), 32, responseAPDU.getData().length);
 
@@ -153,12 +159,25 @@ public class SecureChannelSession {
         }
 
         md.reset();
+        finalKey = new byte[cardChallenge.length];
+//        System.arraycopy(secretHash, 0, finalKey, 0, secretHash.length);
+        System.arraycopy(cardChallenge, 0, finalKey, 0, cardChallenge.length);
+
+        byte[] finalHash = new byte[finalKey.length];
+        md.doFinal(finalKey, (short) 0, (short) finalKey.length, finalHash, (short) 0);
+//        md.doFinal(finalKey, (short) 0, (short) finalKey.length, finalHash, (short) 0);
+        responseAPDU = this.pair(Constants.pairP1LastStep, finalHash);
+
+        md.reset();
+
         finalKey = new byte[secretHash.length + responseAPDU.getData().length - 1];
         System.arraycopy(secretHash, 0, finalKey, 0, secretHash.length);
         System.arraycopy(Arrays.copyOfRange(responseAPDU.getData(), 1, responseAPDU.getData().length), 0,
                 finalKey, secretHash.length, responseAPDU.getData().length - 1);
 
-        this.setPairingKey(md.digest(finalKey));
+        byte[] pairingKey = new byte[finalKey.length];
+        md.doFinal(finalKey, (short) 0, (short) finalKey.length, pairingKey, (short) 0);
+        this.setPairingKey(pairingKey);
         this.setPairingIndex(responseAPDU.getData()[0]);
     }
 
@@ -188,7 +207,9 @@ public class SecureChannelSession {
         System.arraycopy(Arrays.copyOfRange(responseAPDU.getData(), 0, Constants.scSecretLength), 0,
                 finalKey, this.getSecret().length + this.getPairingKey().length, Constants.scSecretLength);
 
-        byte[] keyData = MessageDigest.getInstance("SHA-512").digest(finalKey);
+        byte[] keyData = new byte[finalKey.length];
+        MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false)
+                .doFinal(finalKey, (short) 0, (short) finalKey.length, keyData, (short) 0);
         this.setSessionEncKey(Arrays.copyOfRange(keyData, 0, Constants.scSecretLength));
         this.setSessionMacKey(Arrays.copyOfRange(keyData, Constants.scSecretLength, Constants.scSecretLength * 2));
 

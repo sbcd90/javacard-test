@@ -191,6 +191,7 @@ public class SecureChannel {
         }
 
         Crypto.sha256.update(pairingSecret, (short) 0, SC_SECRET_LENGTH);
+        Crypto.sha256.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, SC_SECRET_LENGTH, new byte[SC_SECRET_LENGTH], (short) 0);
         Crypto.sha256.doFinal(apduBuffer, ISO7816.OFFSET_CDATA, SC_SECRET_LENGTH, apduBuffer, (short) 0);
         Crypto.random.generateData(secret, (short) 0, SC_SECRET_LENGTH);
         Util.arrayCopyNonAtomic(secret, (short) 0, apduBuffer, SC_SECRET_LENGTH, SC_SECRET_LENGTH);
@@ -208,6 +209,7 @@ public class SecureChannel {
      */
     private short pairStep2(byte[] apduBuffer) {
         Crypto.sha256.update(pairingSecret, (short) 0, SC_SECRET_LENGTH);
+        Crypto.sha256.doFinal(secret, (short) 0, SC_SECRET_LENGTH, new byte[SC_SECRET_LENGTH], (short) 0);
         Crypto.sha256.doFinal(secret, (short) 0, SC_SECRET_LENGTH, secret, (short) 0);
 
         if (Util.arrayCompare(apduBuffer, ISO7816.OFFSET_CDATA, secret, (short) 0, SC_SECRET_LENGTH) != 0) {
