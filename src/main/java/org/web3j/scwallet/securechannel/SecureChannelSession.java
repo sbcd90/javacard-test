@@ -8,6 +8,7 @@ import org.bouncycastle.jce.spec.ECPublicKeySpec;
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.*;
 import java.security.KeyFactory;
@@ -28,7 +29,7 @@ public class SecureChannelSession {
 
     private byte[] pairingKey;
 
-    private byte[] sessionEncKey;
+    private SecretKeySpec sessionEncKey;
 
     private byte[] sessionMacKey;
 
@@ -101,11 +102,11 @@ public class SecureChannelSession {
         return pairingKey;
     }
 
-    public void setSessionEncKey(byte[] sessionEncKey) {
+    public void setSessionEncKey(SecretKeySpec sessionEncKey) {
         this.sessionEncKey = sessionEncKey;
     }
 
-    public byte[] getSessionEncKey() {
+    public SecretKeySpec getSessionEncKey() {
         return sessionEncKey;
     }
 
@@ -210,7 +211,7 @@ public class SecureChannelSession {
         byte[] keyData = new byte[finalKey.length];
         MessageDigest.getInstance(MessageDigest.ALG_SHA_512, false)
                 .doFinal(finalKey, (short) 0, (short) finalKey.length, keyData, (short) 0);
-        this.setSessionEncKey(Arrays.copyOfRange(keyData, 0, Constants.scSecretLength));
+        this.setSessionEncKey(new SecretKeySpec(Arrays.copyOfRange(keyData, 0, Constants.scSecretLength), 0, Constants.scSecretLength, "AES/CBC/ISO7816-4Padding"));
         this.setSessionMacKey(Arrays.copyOfRange(keyData, Constants.scSecretLength, Constants.scSecretLength * 2));
 
         this.setIv(Arrays.copyOfRange(responseAPDU.getData(), Constants.scSecretLength, responseAPDU.getData().length));
@@ -264,7 +265,7 @@ public class SecureChannelSession {
 
         byte[] rmeta = new byte[]{(byte) resp.getData().length, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         byte[] rmac = Arrays.copyOf(resp.getData(), this.getIv().length);
-        byte[] rdata = Arrays.copyOfRange(resp.getData(), this.getIv().length, resp.getData().length);
+        byte[] rdata = Arrays.copyOfRange(resp.getData(), this.getIv().length + 2, resp.getData().length);
 
         byte[] plainData = decryptApdu(rdata);
 
@@ -313,19 +314,17 @@ public class SecureChannelSession {
             throw new CardException(String.format("Payload of %d bytes exceeds maximum of %d", data.length, Constants.maxPayloadSize));
         }
 
-        data = pad(data, (byte) 0x80);
+//        data = pad(data, (byte) 0x80);
 
-        Cipher cipher = Cipher.getInstance("AES");
-        SecretKey secretKey = new SecretKeySpec(this.getSessionEncKey(), 0, this.getSessionEncKey().length, "AES");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        Cipher cipher = Cipher.getInstance("AES", "BC");
+        cipher.init(Cipher.ENCRYPT_MODE, this.getSessionEncKey());
 
         return cipher.doFinal(data);
     }
 
     public byte[] decryptApdu(byte[] data) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES");
-        SecretKey secretKey = new SecretKeySpec(this.getSessionEncKey(), 0, this.getSessionEncKey().length, "AES");
-        cipher.init(Cipher.DECRYPT_MODE, secretKey);
+        Cipher cipher = Cipher.getInstance("AES", "BC");
+        cipher.init(Cipher.DECRYPT_MODE, this.getSessionEncKey());
 
         byte[] ret = cipher.doFinal(data);
         return unpad(ret,(byte) 0x80);
@@ -334,9 +333,8 @@ public class SecureChannelSession {
     public void updateIV(byte[] meta, byte[] data) throws Exception {
         data = pad(data, (byte) 0);
 
-        Cipher cipher = Cipher.getInstance("AES");
-        SecretKey secretKey = new SecretKeySpec(this.getSessionEncKey(), 0, this.getSessionEncKey().length, "AES");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        Cipher cipher = Cipher.getInstance("AES/CBC/ISO7816-4Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, this.getSessionEncKey());
 
         meta = cipher.doFinal(meta);
         data = cipher.doFinal(data);

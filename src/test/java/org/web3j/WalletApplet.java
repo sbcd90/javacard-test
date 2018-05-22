@@ -166,7 +166,7 @@ public class WalletApplet extends BaseApplet {
         SECP256k1.setCurveParameters(publicKey);
         SECP256k1.setCurveParameters(privateKey);
 
-        signature = Signature.getInstance(Signature.ALG_RSA_SHA_ISO9796_MR, false);
+        signature = Signature.getInstance(Signature.ALG_HMAC_RIPEMD160, false);
 
         short c9Off = (short)(bOffset + bArray[bOffset] + 1); // Skip AID
         c9Off += (short)(bArray[c9Off] + 2); // Skip Privileges and parameter length
